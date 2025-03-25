@@ -30,8 +30,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     ) {}
 }
 
-private extension UISceneConfiguration {
-    func apply(_ config: (UISceneConfiguration) -> Void) -> UISceneConfiguration {
+extension UISceneConfiguration {
+    fileprivate func apply(_ config: (UISceneConfiguration) -> Void) -> UISceneConfiguration {
         config(self)
         return self
     }

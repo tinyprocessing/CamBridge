@@ -161,11 +161,3 @@ Ideas for improvement:
 
 This project is unlicensed—use it freely at your own risk!
 
----
-
-### Notes
-- I assumed `command_help.txt` isn’t critical for now, so it’s omitted from the README. If you want it included, let me know its contents!
-- The GitHub badge is a suggestion—remove it if you don’t want it.
-- Save this as `README.md` in the `CamBridge/` root directory.
-
-Let me know if you need further adjustments!

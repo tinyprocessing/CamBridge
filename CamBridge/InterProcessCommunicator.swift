@@ -1,8 +1,8 @@
-import UIKit
-import Network
 import Combine
+import Network
+import UIKit
 
-internal class InterProcessCommunicator {
+class InterProcessCommunicator {
     private var listener: NWListener?
     private var tempImage = Data()
     private var isCancelled = false
@@ -16,7 +16,7 @@ internal class InterProcessCommunicator {
         detachConnection()
     }
 
-    internal func connect() {
+    func connect() {
         guard listener == nil else { return }
 
         do {
@@ -26,7 +26,7 @@ internal class InterProcessCommunicator {
                 self?.receive(on: newConnection)
             }
             listener?.start(queue: .global())
-        } catch { }
+        } catch {}
     }
 
     private func receive(on connection: NWConnection) {
@@ -58,7 +58,7 @@ internal class InterProcessCommunicator {
         }
     }
 
-    internal func detachConnection() {
+    func detachConnection() {
         guard listener != nil else { return }
         isCancelled = true
         listener?.cancel()
@@ -66,10 +66,10 @@ internal class InterProcessCommunicator {
     }
 }
 
-private extension InterProcessCommunicator {
-    enum Config {
+extension InterProcessCommunicator {
+    fileprivate enum Config {
         static let port: NWEndpoint.Port = 5005
-        static let singleByte: Int = 1
-        static let endOfDataByte: UInt8 = UInt8(ascii: ".")
+        static let singleByte = 1
+        static let endOfDataByte = UInt8(ascii: ".")
     }
 }

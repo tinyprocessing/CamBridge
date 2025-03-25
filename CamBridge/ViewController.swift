@@ -1,7 +1,7 @@
-import Foundation
-import UIKit
 import AVFoundation
 import Combine
+import Foundation
+import UIKit
 
 protocol CameraFeedSource {
     func startCapture()
@@ -17,8 +17,9 @@ class RealCameraFeed: CameraFeedSource {
 
     func startCapture() {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: device) else { return }
-        
+              let input = try? AVCaptureDeviceInput(device: device)
+        else { return }
+
         captureSession.addInput(input)
         previewLayer.session = captureSession
         previewLayer.videoGravity = .resizeAspectFill
