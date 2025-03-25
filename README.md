@@ -1,22 +1,24 @@
-# VideoStreamUDP
+# CamBridge
 
-A cross-platform project for streaming video frames from a Python-based sender to a Swift-based receiver over UDP. The sender captures video from a webcam, converts frames to PNG images, and sends them to the receiver, which reconstructs and processes the images.
+A lightweight framework for streaming video frames from a Python-based server to an iOS/macOS app over UDP. The server captures webcam footage, processes it into PNG images, and sends it to the client, which uses Combine to publish received `UIImage` objects.
+
+[![GitHub](https://img.shields.io/github/stars/tinyprocessing/CamBridge?style=social)](https://github.com/tinyprocessing/CamBridge)
 
 ## Overview
 
-- **Sender (Python):** Captures video frames using OpenCV, processes them with Pillow, and sends them over UDP to `127.0.0.1:5005`.
-- **Receiver (Swift):** Listens on UDP port 5005 using Network.framework, reconstructs PNG images into `UIImage` objects, and passes them to a handler for further processing (e.g., display).
+- **Server (Python):** Captures video frames using OpenCV, crops and converts them to PNG with Pillow, and sends them over UDP to `127.0.0.1:5005`.
+- **Client (Swift):** An iOS/macOS app that listens on UDP port 5005 using `Network.framework`, reconstructs PNG images into `UIImage` objects, and publishes them via a Combine `AnyPublisher`.
 
 ## Features
 
-- Real-time video frame streaming over UDP.
-- Configurable screen size for cropping frames.
-- Command-line options for verbose mode and camera preview.
-- Automatic cleanup of resources to prevent file descriptor leaks.
+- Real-time video streaming over UDP.
+- Configurable screen sizes for cropping frames (via `displays.csv`).
+- Combine integration for reactive image handling in Swift.
+- Command-line options for verbose mode and device selection.
 
 ## Prerequisites
 
-### Sender (Python)
+### Server (Python)
 - Python 3.6+
 - Libraries:
   - `numpy`
@@ -27,120 +29,133 @@ A cross-platform project for streaming video frames from a Python-based sender t
   ```bash
   pip install numpy opencv-python pillow pandas
   ```
-- A webcam (or adjust the code to use a video file).
+- A webcam (or modify `server.py` to use a video file).
 
-### Receiver (Swift)
-- Xcode 12+ (for Network.framework support)
-- iOS 13+ or macOS 10.15+ target
+### Client (Swift)
+- Xcode 12+ (for `Network.framework` and Combine support)
+- iOS 13+ or macOS 10.15+
 - Swift 5+
 
 ## Project Structure
 
-```
-CamBridge/
-├── sender/
-│   ├── server.py              # Python script for sending video frames
-│   ├── resources/
-│   │   ├── displays.csv     # CSV file with device screen sizes
-│   │   └── command_help.txt # Help text for command-line options
-├── receiver/
-│   └── InterProcessCommunicator.swift # Swift class for receiving frames
-└── README.md
-```
+- `CamBridge/`: iOS/macOS app directory with Swift source files and assets.
+- `resources/`: Contains `displays.csv` for screen size configurations.
+- `server.py`: Python script for streaming video frames.
+- `README.md`: This file.
 
 ## Setup
 
 1. **Clone the Repository:**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/tinyprocessing/CamBridge.git
    cd CamBridge
    ```
 
-2. **Prepare the Sender:**
-   - Ensure `displays.csv` exists in `sender/resources/` with columns: `device,width,height` (e.g., `11,414,896` for iPhone 11).
-   - Create `command_help.txt` in `sender/resources/` with usage instructions (optional).
+2. **Prepare the Server:**
+   - Ensure `displays.csv` is in the `resources/` directory with columns: `device,width,height` (e.g., `11,414,896` for iPhone 11).
 
-3. **Prepare the Receiver:**
-   - Add `InterProcessCommunicator.swift` to your Xcode project.
+3. **Prepare the Client:**
+   - Open `CamBridge.xcodeproj` in Xcode.
+   - Build the project for your target (iOS Simulator or device).
 
 ## Usage
 
-### Running the Sender (Python)
-1. Navigate to the `sender` directory:
+### Running the Server (Python)
+1. Navigate to the project root:
    ```bash
-   cd sender
+   cd CamBridge
    ```
-2. Run the script:
+2. Run the server:
    ```bash
-   python main.py
+   python server.py
    ```
 3. Optional arguments:
    - `-v` or `--verbose`: Enable verbose logging.
-   - `-c` or `--camera`: (Not implemented in preview; reserved for future use.)
    - `-h` or `--help`: Show help and exit.
    - `<device>`: Specify a device name (e.g., `11` for iPhone 11 screen size).
 
    Example:
    ```bash
-   python main.py --verbose 11
+   python server.py --verbose 11
    ```
 
-4. Press `q` to stop the sender.
+4. Press `q` to stop the server.
 
-### Running the Receiver (Swift)
-1. Integrate `InterProcessCommunicator` into your app:
+### Running the Client (Swift)
+1. In `ViewController.swift` (or another appropriate file), set up the communicator:
    ```swift
-   let communicator = InterProcessCommunicator()
-   communicator.connect { image in
-       DispatchQueue.main.async {
-           // Example: Display the image in a UIImageView
-           yourImageView.image = image
+   import UIKit
+   import Combine
+
+   class ViewController: UIViewController {
+       @IBOutlet weak var imageView: UIImageView!
+       private var communicator: InterProcessCommunicator?
+       private var cancellables = Set<AnyCancellable>()
+
+       override func viewDidLoad() {
+           super.viewDidLoad()
+           communicator = InterProcessCommunicator()
+           communicator?.connect()
+           communicator?.imagePublisher
+               .receive(on: DispatchQueue.main)
+               .sink { [weak self] image in
+                   self?.imageView.image = image
+               }
+               .store(in: &cancellables)
+       }
+
+       override func viewWillDisappear(_ animated: Bool) {
+           super.viewWillDisappear(animated)
+           communicator?.detachConnection()
        }
    }
    ```
-2. Build and run your app in Xcode.
-
-3. To stop receiving:
-   ```swift
-   communicator.detachConnection()
-   ```
+2. Connect an `UIImageView` in your storyboard to the `@IBOutlet`.
+3. Build and run the app in Xcode.
 
 ## How It Works
 
-1. **Sender:**
+1. **Server:**
    - Captures frames from the webcam.
-   - Crops frames to the specified screen size.
+   - Crops frames to the specified screen size (from `displays.csv`).
    - Converts frames to PNG and sends them over UDP with a `.` delimiter between images.
 
-2. **Receiver:**
+2. **Client:**
    - Listens on UDP port 5005.
    - Buffers incoming packets until a `.` delimiter is received.
-   - Constructs a `UIImage` from the buffered data and passes it to the handler.
+   - Publishes reconstructed `UIImage` objects via a Combine `PassthroughSubject`.
 
 ## Troubleshooting
 
 ### "Too Many Open Files" Error
-- **Symptoms:** `nw_listener_inbox_accept_udp socket() failed [24: Too many open files]` (Swift) or similar (Python).
+- **Symptoms:** `nw_listener_inbox_accept_udp socket() failed [24: Too many open files]`.
 - **Fixes:**
-  - Ensure the Python script reuses a single socket (fixed in the provided code).
-  - Verify `detachConnection()` is called in Swift when stopping the receiver.
-  - Check file descriptor limits: `ulimit -n` (increase to 4096 if needed: `ulimit -n 4096`).
+  - Ensure `server.py` reuses a single socket (fixed in the provided code).
+  - Call `detachConnection()` when the Swift app stops (e.g., in `viewWillDisappear`).
+  - Check `ulimit -n` (increase if needed: `ulimit -n 4096`).
 
-### No Images Received
-- Ensure both sender and receiver are running simultaneously.
-- Verify the UDP port (5005) isn’t blocked by a firewall.
-- Add logging in Swift’s `receive(on:handler:)` to debug packet reception.
+### No Images Displayed
+- Verify both server and client are running simultaneously.
+- Ensure UDP port 5005 isn’t blocked by a firewall.
+- Add logging in `InterProcessCommunicator.receive(on:)` to debug packet reception.
 
 ### Performance Issues
-- Reduce frame rate in Python by adding a delay (e.g., `cv2.waitKey(33)` for ~30 FPS).
-- Lower the resolution in `screen_size` to reduce data size.
+- Add a delay in `server.py` (e.g., `cv2.waitKey(33)` for ~30 FPS).
+- Adjust `screen_size` in `displays.csv` to reduce data size.
 
 ## Contributing
 
-Feel free to submit issues or pull requests for improvements, such as:
-- Adding TCP support as an alternative.
-- Implementing camera preview in Python.
-- Enhancing error handling.
+Contributions are welcome! Please:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/your-feature`).
+3. Commit your changes (`git commit -m "Add your feature"`).
+4. Push to the branch (`git push origin feature/your-feature`).
+5. Open a pull request.
+
+Ideas for improvement:
+- Add TCP support as an alternative protocol.
+- Implement error handling for network interruptions.
+- Support dynamic frame rate control.
 
 ## License
 
@@ -148,4 +163,9 @@ This project is unlicensed—use it freely at your own risk!
 
 ---
 
-Let me know if you’d like to tweak this further or add specific details (e.g., your GitHub repo URL)! You can save this as `README.md` in your project root directory.
+### Notes
+- I assumed `command_help.txt` isn’t critical for now, so it’s omitted from the README. If you want it included, let me know its contents!
+- The GitHub badge is a suggestion—remove it if you don’t want it.
+- Save this as `README.md` in the `CamBridge/` root directory.
+
+Let me know if you need further adjustments!
